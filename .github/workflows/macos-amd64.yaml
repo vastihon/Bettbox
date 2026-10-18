@@ -1,0 +1,60 @@
+name: macos-amd64
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+env:
+  IS_STABLE: true
+  IS_PRERELEASE: false
+  SHOULD_RELEASE: false
+  SENTRY_BACKEND: none
+  SIGNPATH_API_TOKEN: ''
+  IPINFO_TOKEN: ''
+jobs:
+  build:
+    runs-on: macos-26
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Select Xcode
+        run: |
+          X="$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)"
+          [ -n "$X" ] && sudo xcode-select -s "$X/Contents/Developer" || true
+          xcodebuild -version
+      - name: Setup Rust (macOS)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-apple-darwin
+      - name: Setup Golang
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.25.x'
+          cache-dependency-path: core/go.sum
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.47.7'
+          cache: true
+      - name: Disable Swift Package Manager (macOS)
+        run: flutter config --no-enable-swift-package-manager
+      - name: Clear Pub Cache Credentials
+        run: rm -f ~/.pub-cache/credentials.json 2>/dev/null || true
+      - name: Build Bettbox (macOS x64)
+        run: |
+          flutter pub get
+          dart run build_runner build
+          dart setup.dart macos --arch amd64
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: Bettbox-macos-amd64
+          path: ./dist/*
+          archive: false
+          overwrite: true
